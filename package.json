@@ -1,17 +1,13 @@
 {
-  "name": "star-rhythm-game-server",
+  "name": "step-rhythm-game",
   "version": "1.0.0",
-  "description": "星律启奏 4K 原创音游后端",
-  "main": "index.js",
+  "description": "4K step rhythm game with ranking",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "start": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "uuid": "^9.0.1"
+    "express": "^4.19.2",
+    "fs-extra": "^11.2.0"
   }
 }
