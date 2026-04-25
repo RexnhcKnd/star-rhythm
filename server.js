@@ -1,88 +1,70 @@
 const express = require("express");
-const path = require("path");
+const cors = require("cors");
 const fs = require("fs-extra");
+const path = require("path");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const RANKINGS_FILE = path.join(__dirname, "rankings.json");
 
-const PUBLIC_DIR = path.join(__dirname, "public");
-const RANKING_FILE = path.join(__dirname, "rankings.json");
-const MAX_RANKINGS = 10;
-
+app.use(cors());
 app.use(express.json());
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(path.join(__dirname, "public")));
 
-async function ensureRankingFile() {
-  const exists = await fs.pathExists(RANKING_FILE);
-  if (!exists) {
-    await fs.writeJson(RANKING_FILE, [], { spaces: 2 });
-  }
-}
-
-function normalizeEntry(item = {}) {
-  return {
-    playerName: String(item.playerName || "----").slice(0, 4),
-    score: Number(item.score || 0),
-    speed: Number(item.speed || 0),
-    combo: Number(item.combo || 0),
-    rank: String(item.rank || "C"),
-    createdAt: item.createdAt || new Date().toISOString()
-  };
-}
-
-function sortRankings(list) {
-  return list.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    if (b.speed !== a.speed) return b.speed - a.speed;
-    return b.combo - a.combo;
+app.get("/", (req, res) => {
+  res.json({
+    ok: true,
+    message: "Rhythm game backend is running"
   });
-}
+});
 
 app.get("/api/rankings", async (req, res) => {
   try {
-    await ensureRankingFile();
-    const list = await fs.readJson(RANKING_FILE);
-    res.json(sortRankings(list).slice(0, MAX_RANKINGS));
+    const exists = await fs.pathExists(RANKINGS_FILE);
+    if (!exists) {
+      await fs.writeJson(RANKINGS_FILE, []);
+    }
+    const rankings = await fs.readJson(RANKINGS_FILE);
+    res.json(rankings);
   } catch (err) {
-    res.status(500).json({ message: "Failed to load rankings" });
+    console.error("GET /api/rankings error:", err);
+    res.status(500).json({ error: "Failed to read rankings" });
   }
 });
 
 app.post("/api/rankings", async (req, res) => {
   try {
-    await ensureRankingFile();
+    const { name, score, maxCombo, accuracy } = req.body;
 
-    const { playerName, score, speed, combo, rank } = req.body || {};
-
-    if (!playerName || typeof playerName !== "string") {
-      return res.status(400).json({ message: "Invalid playerName" });
+    if (!name || typeof score !== "number") {
+      return res.status(400).json({ error: "Invalid ranking data" });
     }
 
-    const entry = normalizeEntry({
-      playerName,
+    const exists = await fs.pathExists(RANKINGS_FILE);
+    if (!exists) {
+      await fs.writeJson(RANKINGS_FILE, []);
+    }
+
+    const rankings = await fs.readJson(RANKINGS_FILE);
+    rankings.push({
+      name,
       score,
-      speed,
-      combo,
-      rank
+      maxCombo: maxCombo || 0,
+      accuracy: accuracy || 0,
+      time: new Date().toISOString()
     });
 
-    const list = await fs.readJson(RANKING_FILE);
-    list.push(entry);
+    rankings.sort((a, b) => b.score - a.score);
+    const top10 = rankings.slice(0, 10);
 
-    const sorted = sortRankings(list).slice(0, MAX_RANKINGS);
-    await fs.writeJson(RANKING_FILE, sorted, { spaces: 2 });
-
-    res.json({ message: "Ranking saved", data: entry });
+    await fs.writeJson(RANKINGS_FILE, top10, { spaces: 2 });
+    res.json({ success: true, rankings: top10 });
   } catch (err) {
-    res.status(500).json({ message: "Failed to save ranking" });
+    console.error("POST /api/rankings error:", err);
+    res.status(500).json({ error: "Failed to save ranking" });
   }
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
-});
-
-app.listen(PORT, async () => {
-  await ensureRankingFile();
-  console.log(`Server running at http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
