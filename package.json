@@ -1,12 +1,12 @@
 {
   "name": "step-rhythm-game",
   "version": "1.0.0",
+  "description": "4K step rhythm game with ranking",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
     "express": "^4.19.2",
     "fs-extra": "^11.2.0"
   }
