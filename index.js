@@ -15,6 +15,10 @@ const rankingBoard = new RankingBoard(10);
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("Backend is running");
+});
+
 function loadRankData() {
   try {
     if (!fs.existsSync(rankFilePath)) {
@@ -23,123 +27,141 @@ function loadRankData() {
     const raw = fs.readFileSync(rankFilePath, "utf-8");
     const parsed = JSON.parse(raw || "[]");
     rankingBoard.load(parsed);
+    console.log("Rank data loaded");
   } catch (e) {
+    console.error("loadRankData error:", e);
     rankingBoard.load([]);
   }
 }
 
 function saveRankData() {
-  fs.writeFileSync(
-    rankFilePath,
-    JSON.stringify(rankingBoard.getRankings(), null, 2),
-    "utf-8"
-  );
+  try {
+    fs.writeFileSync(
+      rankFilePath,
+      JSON.stringify(rankingBoard.getRankings(), null, 2),
+      "utf-8"
+    );
+  } catch (e) {
+    console.error("saveRankData error:", e);
+  }
 }
 
 loadRankData();
 
-/**
- * 游戏对局初始化接口
- */
 app.post("/api/game/init", (req, res) => {
-  const sessionId = uuidv4();
-  const session = new RhythmGameSession();
-  sessions.set(sessionId, session);
+  try {
+    const sessionId = uuidv4();
+    const session = new RhythmGameSession();
+    sessions.set(sessionId, session);
 
-  res.json({
-    success: true,
-    sessionId,
-    ...session.getInitState()
-  });
+    res.json({
+      success: true,
+      sessionId,
+      ...session.getInitState()
+    });
+  } catch (e) {
+    console.error("/api/game/init error:", e);
+    res.status(500).json({ success: false, message: "init error" });
+  }
 });
 
-/**
- * 按键判定接收接口
- */
 app.post("/api/game/judge", (req, res) => {
-  const { sessionId, key } = req.body || {};
+  try {
+    const { sessionId, key } = req.body || {};
 
-  if (!sessionId || !sessions.has(sessionId)) {
-    return res.status(400).json({
-      success: false,
-      message: "无效的对局会话"
+    if (!sessionId || !sessions.has(sessionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "无效的对局会话"
+      });
+    }
+
+    const session = sessions.get(sessionId);
+    const result = session.judge(String(key || "").toLowerCase());
+
+    if (result.status === "gameover") {
+      sessions.delete(sessionId);
+    }
+
+    res.json({
+      success: true,
+      ...result
     });
+  } catch (e) {
+    console.error("/api/game/judge error:", e);
+    res.status(500).json({ success: false, message: "judge error" });
   }
-
-  const session = sessions.get(sessionId);
-  const result = session.judge(String(key || "").toLowerCase());
-
-  if (result.status === "gameover") {
-    sessions.delete(sessionId);
-  }
-
-  res.json({
-    success: true,
-    ...result
-  });
 });
 
-/**
- * 分数同步接口
- */
 app.get("/api/game/score/:sessionId", (req, res) => {
-  const sessionId = req.params.sessionId;
-  if (!sessions.has(sessionId)) {
-    return res.status(404).json({
-      success: false,
-      message: "对局不存在"
+  try {
+    const sessionId = req.params.sessionId;
+    if (!sessions.has(sessionId)) {
+      return res.status(404).json({
+        success: false,
+        message: "对局不存在"
+      });
+    }
+
+    const session = sessions.get(sessionId);
+    res.json({
+      success: true,
+      score: session.score
     });
+  } catch (e) {
+    console.error("/api/game/score error:", e);
+    res.status(500).json({ success: false, message: "score error" });
   }
-
-  const session = sessions.get(sessionId);
-  res.json({
-    success: true,
-    score: session.score
-  });
 });
 
-/**
- * 结算数据提交接口（预留）
- */
 app.post("/api/game/result", (req, res) => {
-  const { score, totalTime, notesPerSecond } = req.body || {};
-  res.json({
-    success: true,
-    score: Number(score || 0),
-    totalTime: Number(totalTime || 0),
-    notesPerSecond: Number(notesPerSecond || 0)
-  });
+  try {
+    const { score, totalTime, notesPerSecond } = req.body || {};
+    res.json({
+      success: true,
+      score: Number(score || 0),
+      totalTime: Number(totalTime || 0),
+      notesPerSecond: Number(notesPerSecond || 0)
+    });
+  } catch (e) {
+    console.error("/api/game/result error:", e);
+    res.status(500).json({ success: false, message: "result error" });
+  }
 });
 
-/**
- * 排行榜查询接口
- */
 app.get("/api/rank", (req, res) => {
-  res.json({
-    success: true,
-    rankings: rankingBoard.getRankings()
-  });
+  try {
+    res.json({
+      success: true,
+      rankings: rankingBoard.getRankings()
+    });
+  } catch (e) {
+    console.error("/api/rank error:", e);
+    res.status(500).json({ success: false, message: "rank error" });
+  }
 });
 
-/**
- * 排行榜写入/排序接口
- */
 app.post("/api/rank/submit", (req, res) => {
-  let { playerName, score, speed } = req.body || {};
+  try {
+    let { playerName, score, speed } = req.body || {};
 
-  playerName = String(playerName || "玩家").trim().slice(0, 4);
-  score = Number(score || 0);
-  speed = Number(speed || 0);
+    playerName = String(playerName || "玩家").trim().slice(0, 4);
+    score = Number(score || 0);
+    speed = Number(speed || 0);
 
-  rankingBoard.addScore(playerName, score, speed);
-  saveRankData();
+    rankingBoard.addScore(playerName, score, speed);
+    saveRankData();
 
-  res.json({
-    success: true,
-    rankings: rankingBoard.getRankings()
-  });
+    res.json({
+      success: true,
+      rankings: rankingBoard.getRankings()
+    });
+  } catch (e) {
+    console.error("/api/rank/submit error:", e);
+    res.status(500).json({ success: false, message: "submit error" });
+  }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running on port ${PORT}`);
 });
